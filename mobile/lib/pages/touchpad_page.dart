@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/connection_service.dart';
@@ -168,7 +168,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
     final sens = _settings.sensitivity;
 
     _gestureDistance += delta.distance;
-    if (_gestureDistance > _tapSlop / max(sens, 0.1)) {
+    if (_gestureDistance > _tapSlop / math.max(sens, 0.1)) {
       _moved = true;
     }
 
@@ -185,10 +185,11 @@ class _TouchpadPageState extends State<TouchpadPage> {
       double dy = delta.dy * sens * invert;
 
       if (_settings.enhancePrecision) {
-        // Decelerate at slow speeds for sub-pixel precision
         final speed = delta.distance * sens;
-        if (speed < 3.0) {
-          final factor = 0.3 + 0.7 * (speed / 3.0);
+        if (speed > 0.01) {
+          // Normalize around 4.0 as the unity gain point.
+          // Below 4.0 = deceleration, Above 4.0 = acceleration.
+          final factor = math.sqrt(speed / 4.0);
           dx *= factor;
           dy *= factor;
         }

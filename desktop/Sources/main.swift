@@ -33,17 +33,46 @@ let dedup = Deduplicator()
 // MARK: - Mouse Controller
 
 struct MouseController {
+    static func getVisibleScreens() -> [CGRect] {
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &displays, &count)
+        return displays.map { CGDisplayBounds($0) }
+    }
+
     static func move(dx: Double, dy: Double) {
         guard let current = CGEvent(source: nil)?.location else { return }
-        let newPos = CGPoint(x: current.x + dx, y: current.y + dy)
-        let source = CGEventSource(stateID: .combinedSessionState)
+        let screens = getVisibleScreens()
         
-        CGEvent(
+        let targetX = current.x + dx
+        let targetY = current.y + dy
+        let targetPos = CGPoint(x: targetX, y: targetY)
+        
+        // Find if target is inside any screen
+        var finalPos = targetPos
+        let isGlobalHit = screens.contains { $0.contains(targetPos) }
+        
+        if !isGlobalHit {
+            // It's a wall hit! Find the screen we are currently in and clamp to it.
+            if let currentScreen = screens.first(where: { $0.contains(current) }) {
+                let clampedX = min(max(targetX, currentScreen.minX), currentScreen.maxX - 1)
+                let clampedY = min(max(targetY, currentScreen.minY), currentScreen.maxY - 1)
+                finalPos = CGPoint(x: clampedX, y: clampedY)
+            }
+        }
+        
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let event = CGEvent(
             mouseEventSource: source,
             mouseType: .mouseMoved,
-            mouseCursorPosition: newPos,
+            mouseCursorPosition: finalPos,
             mouseButton: .left
-        )?.post(tap: .cgSessionEventTap)
+        )
+        
+        event?.setDoubleValueField(CGEventField.mouseEventDeltaX, value: dx)
+        event?.setDoubleValueField(CGEventField.mouseEventDeltaY, value: dy)
+        event?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 
     static func click(button: String) {
@@ -66,12 +95,12 @@ struct MouseController {
         }
 
         let down = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: pos, mouseButton: mouseButton)
-        down?.setIntegerValueField(.mouseEventClickState, value: 1)
-        down?.post(tap: .cgSessionEventTap)
+        down?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        down?.post(tap: CGEventTapLocation.cgSessionEventTap)
         
         let up = CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: pos, mouseButton: mouseButton)
-        up?.setIntegerValueField(.mouseEventClickState, value: 1)
-        up?.post(tap: .cgSessionEventTap)
+        up?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        up?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 
     static func doubleClick() {
@@ -79,20 +108,20 @@ struct MouseController {
         let source = CGEventSource(stateID: .combinedSessionState)
 
         let down1 = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: pos, mouseButton: .left)
-        down1?.setIntegerValueField(.mouseEventClickState, value: 1)
-        down1?.post(tap: .cgSessionEventTap)
+        down1?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        down1?.post(tap: CGEventTapLocation.cgSessionEventTap)
 
         let up1 = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: pos, mouseButton: .left)
-        up1?.setIntegerValueField(.mouseEventClickState, value: 1)
-        up1?.post(tap: .cgSessionEventTap)
+        up1?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        up1?.post(tap: CGEventTapLocation.cgSessionEventTap)
 
         let down2 = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: pos, mouseButton: .left)
-        down2?.setIntegerValueField(.mouseEventClickState, value: 2)
-        down2?.post(tap: .cgSessionEventTap)
+        down2?.setIntegerValueField(CGEventField.mouseEventClickState, value: 2)
+        down2?.post(tap: CGEventTapLocation.cgSessionEventTap)
 
         let up2 = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: pos, mouseButton: .left)
-        up2?.setIntegerValueField(.mouseEventClickState, value: 2)
-        up2?.post(tap: .cgSessionEventTap)
+        up2?.setIntegerValueField(CGEventField.mouseEventClickState, value: 2)
+        up2?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 
     static func mouseDown(button: String) {
@@ -102,8 +131,8 @@ struct MouseController {
         let mouseButton: CGMouseButton = (button == "right") ? .right : .left
         
         let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: pos, mouseButton: mouseButton)
-        event?.setIntegerValueField(.mouseEventClickState, value: 1)
-        event?.post(tap: .cgSessionEventTap)
+        event?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        event?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 
     static func mouseUp(button: String) {
@@ -113,8 +142,8 @@ struct MouseController {
         let mouseButton: CGMouseButton = (button == "right") ? .right : .left
         
         let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: pos, mouseButton: mouseButton)
-        event?.setIntegerValueField(.mouseEventClickState, value: 1)
-        event?.post(tap: .cgSessionEventTap)
+        event?.setIntegerValueField(CGEventField.mouseEventClickState, value: 1)
+        event?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 
     static func scroll(dx: Double, dy: Double) {
@@ -129,23 +158,38 @@ struct MouseController {
             wheel2: scrollX,
             wheel3: 0
         ) {
-            scrollEvent.post(tap: .cgSessionEventTap)
+            scrollEvent.post(tap: CGEventTapLocation.cgSessionEventTap)
         }
     }
 
     static func drag(dx: Double, dy: Double) {
-        guard let event = CGEvent(source: nil) else { return }
-        let current = event.location
-        let newX = max(0, current.x + dx)
-        let newY = max(0, current.y + dy)
-        let newPos = CGPoint(x: newX, y: newY)
+        guard let currentEvent = CGEvent(source: nil) else { return }
+        let current = currentEvent.location
+        let screens = getVisibleScreens()
+        
+        let targetX = current.x + dx
+        let targetY = current.y + dy
+        let targetPos = CGPoint(x: targetX, y: targetY)
+        
+        var finalPos = targetPos
+        if !screens.contains(where: { $0.contains(targetPos) }) {
+            if let currentScreen = screens.first(where: { $0.contains(current) }) {
+                let clampedX = min(max(targetX, currentScreen.minX), currentScreen.maxX - 1)
+                let clampedY = min(max(targetY, currentScreen.minY), currentScreen.maxY - 1)
+                finalPos = CGPoint(x: clampedX, y: clampedY)
+            }
+        }
 
-        CGEvent(
+        let dragEvent = CGEvent(
             mouseEventSource: nil,
             mouseType: .leftMouseDragged,
-            mouseCursorPosition: newPos,
+            mouseCursorPosition: finalPos,
             mouseButton: .left
-        )?.post(tap: .cghidEventTap)
+        )
+        
+        dragEvent?.setDoubleValueField(CGEventField.mouseEventDeltaX, value: dx)
+        dragEvent?.setDoubleValueField(CGEventField.mouseEventDeltaY, value: dy)
+        dragEvent?.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 }
 
