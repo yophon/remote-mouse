@@ -122,188 +122,179 @@ class _ConnectPageState extends State<ConnectPage> {
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
-        child: Padding(
+        child: ListView(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.settings_outlined,
-                        color: cs.onSurface.withValues(alpha: 0.5)),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SettingsPage(settings: _settings),
-                      ),
+          children: [
+            const SizedBox(height: 20),
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.settings_outlined,
+                      color: cs.onSurface.withValues(alpha: 0.5)),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SettingsPage(settings: _settings),
                     ),
                   ),
-                ],
-              ),
-              Icon(Icons.mouse, size: 56, color: cs.primary),
-              const SizedBox(height: 12),
-              Text(
-                _settings.text('connect'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _settings.text('manual_connect'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.4)),
-              ),
-              const SizedBox(height: 28),
-
-              // Manual input
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: TextField(
-                      controller: _ipController,
-                      style: TextStyle(color: cs.onSurface),
-                      decoration: _inputDeco('192.168.x.x', cs),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 1,
-                    child: TextField(
-                      controller: _portController,
-                      style: TextStyle(color: cs.onSurface),
-                      decoration: _inputDeco('Port', cs),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: isConnecting ? null : () => _connect(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    disabledBackgroundColor: cs.primary.withValues(alpha: 0.4),
-                  ),
-                  child: isConnecting
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: cs.onPrimary))
-                      : Text(_settings.text('connect'),
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              if (hasError) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _connection.errorMessage,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.error, fontSize: 12),
                 ),
               ],
-              const SizedBox(height: 24),
-
-              // Sections list
-              Expanded(
-                child: ListView(
-                  children: [
-                    // Discovered
-                    _buildSection(
-                        title: _settings.text('discovered'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_searching)
-                              SizedBox(
-                                  width: 12,
-                                  height: 12,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: cs.primary)),
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: _searching ? null : _startDiscovery,
-                              child: Icon(Icons.refresh,
-                                  size: 16,
-                                  color: _searching
-                                      ? cs.onSurface.withValues(alpha: 0.2)
-                                      : cs.primary),
-                            ),
-                          ],
-                        ),
-                        cs: cs,
-                        children: _discovered.map((s) => _serverTile(
-                              icon: Icons.computer,
-                              title: s.name ?? _settings.text('unknown'),
-                              subtitle: '${s.host ?? ""}:${s.port ?? 9876}',
-                              onTap: isConnecting
-                                  ? null
-                                  : () => _connect(
-                                      host: s.host, port: s.port ?? 9876),
-                              cs: cs,
-                            )),
-                      ),
-
-                    // History
-                    if (_history.entries.isNotEmpty)
-                      _buildSection(
-                        title: _settings.text('recent'),
-                        cs: cs,
-                        children: _history.entries.map((e) => Dismissible(
-                              key: ValueKey(e.address),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                decoration: BoxDecoration(
-                                  color: cs.error.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(Icons.delete_outline,
-                                    color: cs.error),
-                              ),
-                              onDismissed: (_) =>
-                                  _history.removeEntry(e.host, e.port),
-                              child: _serverTile(
-                                icon: Icons.history,
-                                title: e.address,
-                                subtitle: _timeAgo(e.lastConnected),
-                                onTap: isConnecting
-                                    ? null
-                                    : () =>
-                                        _connect(host: e.host, port: e.port),
-                                cs: cs,
-                              ),
-                            )),
-                      ),
-                  ],
-                ),
+            ),
+            Icon(Icons.mouse, size: 56, color: cs.primary),
+            const SizedBox(height: 12),
+            Text(
+              _settings.text('connect'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _settings.text('manual_connect'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.4)),
+            ),
+            const SizedBox(height: 28),
 
+            // Manual input
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _ipController,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _inputDeco('192.168.x.x', cs),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: _portController,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _inputDeco('Port', cs),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: isConnecting ? null : () => _connect(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  disabledBackgroundColor: cs.primary.withValues(alpha: 0.4),
+                ),
+                child: isConnecting
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: cs.onPrimary))
+                    : Text(_settings.text('connect'),
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            if (hasError) ...[
+              const SizedBox(height: 8),
               Text(
-                _settings.text('wifi_notice'),
+                _connection.errorMessage,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.2), fontSize: 11),
+                style: TextStyle(color: cs.error, fontSize: 12),
               ),
             ],
-          ),
+            const SizedBox(height: 24),
+
+            // Discovered
+            _buildSection(
+                title: _settings.text('discovered'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searching)
+                      SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: cs.primary)),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: _searching ? null : _startDiscovery,
+                      child: Icon(Icons.refresh,
+                          size: 16,
+                          color: _searching
+                              ? cs.onSurface.withValues(alpha: 0.2)
+                              : cs.primary),
+                    ),
+                  ],
+                ),
+                cs: cs,
+                children: _discovered.map((s) => _serverTile(
+                      icon: Icons.computer,
+                      title: s.name ?? _settings.text('unknown'),
+                      subtitle: '${s.host ?? ""}:${s.port ?? 9876}',
+                      onTap: isConnecting
+                          ? null
+                          : () => _connect(
+                              host: s.host, port: s.port ?? 9876),
+                      cs: cs,
+                    )),
+              ),
+
+            // History
+            if (_history.entries.isNotEmpty)
+              _buildSection(
+                title: _settings.text('recent'),
+                cs: cs,
+                children: _history.entries.map((e) => Dismissible(
+                      key: ValueKey(e.address),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        decoration: BoxDecoration(
+                          color: cs.error.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.delete_outline,
+                            color: cs.error),
+                      ),
+                      onDismissed: (_) =>
+                          _history.removeEntry(e.host, e.port),
+                      child: _serverTile(
+                        icon: Icons.history,
+                        title: e.address,
+                        subtitle: _timeAgo(e.lastConnected),
+                        onTap: isConnecting
+                            ? null
+                            : () =>
+                                _connect(host: e.host, port: e.port),
+                        cs: cs,
+                      ),
+                    )),
+              ),
+
+            const SizedBox(height: 12),
+            Text(
+              _settings.text('wifi_notice'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.2), fontSize: 11),
+            ),
+          ],
         ),
       ),
     );

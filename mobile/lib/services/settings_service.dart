@@ -12,14 +12,14 @@ class SettingsService extends ChangeNotifier {
   // Defaults
   ThemeMode _themeMode = ThemeMode.light;
   TransportMode _transportMode = TransportMode.hybrid;
-  double _sensitivity = 1.5;
-  double _scrollSensitivity = 2.0;
+  double _sensitivity = 6.0;
+  double _scrollSensitivity = 4.5;
   bool _invertMouse = false;
   bool _naturalScroll = true;
-  bool _enhancePrecision = false;
+  bool _enhancePrecision = true;
   bool _hapticFeedback = true;
   String _language = 'english'; // 'english' or 'chinese'
-  OrientationLock _orientationLock = OrientationLock.portrait;
+  OrientationLock _orientationLock = OrientationLock.landscape;
 
   ThemeMode get themeMode => _themeMode;
   TransportMode get transportMode => _transportMode;
@@ -45,17 +45,17 @@ class SettingsService extends ChangeNotifier {
     _transportMode = _prefs.getString('transportMode') == 'websocketOnly'
         ? TransportMode.websocketOnly
         : TransportMode.hybrid;
-    _sensitivity = _prefs.getDouble('sensitivity') ?? 1.5;
-    _scrollSensitivity = _prefs.getDouble('scrollSensitivity') ?? 2.0;
+    _sensitivity = _prefs.getDouble('sensitivity') ?? 6.0;
+    _scrollSensitivity = _prefs.getDouble('scrollSensitivity') ?? 4.5;
     _invertMouse = _prefs.getBool('invertMouse') ?? false;
     _naturalScroll = _prefs.getBool('naturalScroll') ?? true;
-    _enhancePrecision = _prefs.getBool('enhancePrecision') ?? false;
+    _enhancePrecision = _prefs.getBool('enhancePrecision') ?? true;
     _hapticFeedback = _prefs.getBool('hapticFeedback') ?? true;
     _language = _prefs.getString('language') ?? 'chinese';
-    final oriStr = _prefs.getString('orientationLock') ?? 'portrait';
+    final oriStr = _prefs.getString('orientationLock') ?? 'landscape';
     _orientationLock = OrientationLock.values.firstWhere(
       (e) => e.name == oriStr,
-      orElse: () => OrientationLock.portrait,
+      orElse: () => OrientationLock.landscape,
     );
     notifyListeners();
   }
