@@ -63,20 +63,46 @@ struct KeyboardController {
         }
     }
 
-    /// Press a special key by name (e.g. "enter", "backspace", "up").
-    /// Supports optional modifiers.
+    /// Press a key by name with optional modifiers.
+    /// Recognized names (enter, backspace, up, etc.) use virtual keycodes.
+    /// Single characters use Unicode-based key events with modifier flags.
     static func pressSpecialKey(_ keyName: String, modifiers: [String] = []) {
         let lower = keyName.lowercased()
-        guard let keyCode = specialKeys[lower] else {
-            // Not a recognized special key — try typing it as text
-            typeText(keyName)
-            return
-        }
 
+        let flags = buildFlags(modifiers)
         let source = CGEventSource(stateID: .combinedSessionState)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
 
+        if let keyCode = specialKeys[lower] {
+            let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+
+            if !flags.isEmpty {
+                down?.flags = flags
+                up?.flags = []
+            }
+
+            down?.post(tap: .cgSessionEventTap)
+            up?.post(tap: .cgSessionEventTap)
+        } else {
+            // Regular character with modifiers (e.g. Cmd+C)
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+
+            var utf16 = Array(keyName.utf16)
+            down?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+            up?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+
+            if !flags.isEmpty {
+                down?.flags = flags
+                up?.flags = []
+            }
+
+            down?.post(tap: .cgSessionEventTap)
+            up?.post(tap: .cgSessionEventTap)
+        }
+    }
+
+    private static func buildFlags(_ modifiers: [String]) -> CGEventFlags {
         var flags: CGEventFlags = []
         for mod in modifiers {
             switch mod.lowercased() {
@@ -87,13 +113,6 @@ struct KeyboardController {
             default: break
             }
         }
-
-        if !flags.isEmpty {
-            down?.flags = flags
-            up?.flags = []
-        }
-
-        down?.post(tap: .cgSessionEventTap)
-        up?.post(tap: .cgSessionEventTap)
+        return flags
     }
 }

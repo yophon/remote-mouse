@@ -10,6 +10,9 @@ import 'settings_page.dart';
 
 enum HapticFile { selection, light, medium, heavy }
 
+/// Termux-style modifier state: off → once (one-shot) → locked (sticky)
+enum _ModState { off, once, locked }
+
 class TouchpadPage extends StatefulWidget {
   final ConnectionService connection;
   final SettingsService settings;
@@ -53,6 +56,16 @@ class _TouchpadPageState extends State<TouchpadPage> {
   final TextEditingController _keyboardController = TextEditingController();
   final FocusNode _keyboardFocusNode = FocusNode();
   String _prevText = ' ';
+
+  // Termux-style modifier keys: single tap = one-shot, double tap = lock
+  final Map<String, _ModState> _modifiers = {
+    'ctrl': _ModState.off,
+    'alt': _ModState.off,
+    'shift': _ModState.off,
+    'cmd': _ModState.off,
+  };
+  DateTime? _lastModTapTime;
+  String? _lastModTapKey;
 
   ConnectionService get _conn => widget.connection;
   SettingsService get _settings => widget.settings;
@@ -445,15 +458,17 @@ class _TouchpadPageState extends State<TouchpadPage> {
       if (_showKeyboard) {
         _keyboardController.text = ' ';
         _prevText = ' ';
-        // Delay focus to after the widget is built
         Future.microtask(() {
           _keyboardFocusNode.requestFocus();
-          // Place cursor at end
           _keyboardController.selection = TextSelection.collapsed(
               offset: _keyboardController.text.length);
         });
       } else {
         _keyboardFocusNode.unfocus();
+        // Reset modifiers
+        for (final key in _modifiers.keys) {
+          _modifiers[key] = _ModState.off;
+        }
       }
     });
   }
@@ -463,11 +478,18 @@ class _TouchpadPageState extends State<TouchpadPage> {
     final prev = _prevText;
 
     if (current.length > prev.length) {
-      // Characters were added
       final added = current.substring(prev.length);
-      _conn.sendKeyText(added);
+      final mods = _activeModifierNames();
+      if (mods.isNotEmpty) {
+        // With modifiers, send each char as special key
+        for (final char in added.split('')) {
+          _conn.sendKeySpecial(char, modifiers: mods);
+        }
+        _consumeOneShotModifiers();
+      } else {
+        _conn.sendKeyText(added);
+      }
     } else if (current.length < prev.length) {
-      // Characters were deleted (backspace)
       final deleted = prev.length - current.length;
       for (int i = 0; i < deleted; i++) {
         _conn.sendKeySpecial('backspace');
@@ -476,7 +498,6 @@ class _TouchpadPageState extends State<TouchpadPage> {
 
     _prevText = current;
 
-    // Keep at least a space so backspace always works
     if (current.isEmpty) {
       _keyboardController.text = ' ';
       _keyboardController.selection =
@@ -485,74 +506,229 @@ class _TouchpadPageState extends State<TouchpadPage> {
     }
   }
 
+  List<String> _activeModifierNames() {
+    return _modifiers.entries
+        .where((e) => e.value != _ModState.off)
+        .map((e) => e.key)
+        .toList();
+  }
+
+  /// Reset one-shot modifiers after a key is sent.
+  void _consumeOneShotModifiers() {
+    setState(() {
+      _modifiers.updateAll((_, v) => v == _ModState.once ? _ModState.off : v);
+    });
+  }
+
+  void _onModTap(String mod) {
+    final now = DateTime.now();
+    setState(() {
+      if (_lastModTapKey == mod &&
+          _lastModTapTime != null &&
+          now.difference(_lastModTapTime!) < const Duration(milliseconds: 400)) {
+        // Double tap → lock
+        _modifiers[mod] = _ModState.locked;
+        _lastModTapKey = null;
+        _lastModTapTime = null;
+      } else {
+        // Single tap → cycle: off→once, once→off, locked→off
+        final cur = _modifiers[mod]!;
+        _modifiers[mod] = cur == _ModState.off ? _ModState.once : _ModState.off;
+        _lastModTapKey = mod;
+        _lastModTapTime = now;
+      }
+    });
+    _vibrate(HapticFile.selection);
+  }
+
+  void _sendSpecialWithMods(String key) {
+    final mods = _activeModifierNames();
+    _conn.sendKeySpecial(key, modifiers: mods);
+    _consumeOneShotModifiers();
+    _vibrate(HapticFile.selection);
+  }
+
   Widget _buildKeyboardBar(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _keyboardController,
-                focusNode: _keyboardFocusNode,
-                autofocus: false,
-                enableSuggestions: false,
-                autocorrect: false,
-                style: TextStyle(color: cs.onSurface, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: _settings.text('keyboard_hint'),
-                  hintStyle: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Extra keys bar (Termux-style)
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            children: [
+              // Modifier keys
+              _modKey(cs, 'ESC', 'esc', isModifier: false),
+              _modKey(cs, 'TAB', 'tab', isModifier: false),
+              _modKeyToggle(cs, 'CTRL', 'ctrl'),
+              _modKeyToggle(cs, 'ALT', 'alt'),
+              _modKeyToggle(cs, 'SHIFT', 'shift'),
+              _modKeyToggle(cs, 'CMD', 'cmd'),
+              const SizedBox(width: 6),
+              // Navigation & common keys
+              _modKey(cs, '↑', 'up', isModifier: false),
+              _modKey(cs, '↓', 'down', isModifier: false),
+              _modKey(cs, '←', 'left', isModifier: false),
+              _modKey(cs, '→', 'right', isModifier: false),
+              _modKey(cs, 'HOME', 'home', isModifier: false),
+              _modKey(cs, 'END', 'end', isModifier: false),
+              _modKey(cs, 'PGUP', 'pageup', isModifier: false),
+              _modKey(cs, 'PGDN', 'pagedown', isModifier: false),
+              _modKey(cs, 'DEL', 'delete', isModifier: false),
+              const SizedBox(width: 6),
+              // Common shortcuts as one-tap
+              _shortcutKey(cs, '⌘C', 'c', ['cmd']),
+              _shortcutKey(cs, '⌘V', 'v', ['cmd']),
+              _shortcutKey(cs, '⌘X', 'x', ['cmd']),
+              _shortcutKey(cs, '⌘Z', 'z', ['cmd']),
+              _shortcutKey(cs, '⌘A', 'a', ['cmd']),
+              _shortcutKey(cs, '⌘⇧Z', 'z', ['cmd', 'shift']),
+              _shortcutKey(cs, '⌘T', 'tab', ['cmd']),
+              _shortcutKey(cs, '⌘W', 'w', ['cmd']),
+              _shortcutKey(cs, '⌘Q', 'q', ['cmd']),
+              _shortcutKey(cs, '⌘SP', 'space', ['cmd']),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        // Text input row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: TextField(
+                    controller: _keyboardController,
+                    focusNode: _keyboardFocusNode,
+                    autofocus: false,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    style: TextStyle(color: cs.onSurface, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: _settings.text('keyboard_hint'),
+                      hintStyle: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.3),
+                          fontSize: 13),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      filled: true,
+                      fillColor:
+                          cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (_) => _onKeyboardInput(),
+                    onSubmitted: (_) {
+                      _sendSpecialWithMods('enter');
+                      _keyboardController.text = ' ';
+                      _keyboardController.selection =
+                          const TextSelection.collapsed(offset: 1);
+                      _prevText = ' ';
+                      _keyboardFocusNode.requestFocus();
+                    },
                   ),
                 ),
-                onChanged: (_) => _onKeyboardInput(),
-                onSubmitted: (_) {
-                  _conn.sendKeySpecial('enter');
-                  // Reset the text field
-                  _keyboardController.text = ' ';
-                  _keyboardController.selection =
-                      const TextSelection.collapsed(offset: 1);
-                  _prevText = ' ';
-                  _keyboardFocusNode.requestFocus();
-                },
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 6),
-          _specialKeyButton(cs, Icons.keyboard_return, 'enter'),
-          _specialKeyButton(cs, Icons.arrow_upward, 'up'),
-          _specialKeyButton(cs, Icons.arrow_downward, 'down'),
-          _specialKeyButton(cs, Icons.arrow_back, 'left'),
-          _specialKeyButton(cs, Icons.arrow_forward, 'right'),
-        ],
+        ),
+      ],
+    );
+  }
+
+  /// Modifier toggle button (Termux-style: tap=once, double-tap=lock)
+  Widget _modKeyToggle(ColorScheme cs, String label, String mod) {
+    final state = _modifiers[mod] ?? _ModState.off;
+    final Color bg;
+    final Color fg;
+    switch (state) {
+      case _ModState.off:
+        bg = cs.surfaceContainerHighest.withValues(alpha: 0.5);
+        fg = cs.onSurface.withValues(alpha: 0.6);
+      case _ModState.once:
+        bg = cs.primary.withValues(alpha: 0.25);
+        fg = cs.primary;
+      case _ModState.locked:
+        bg = cs.primary;
+        fg = cs.onPrimary;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => _onModTap(mod),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            alignment: Alignment.center,
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _specialKeyButton(ColorScheme cs, IconData icon, String key) {
+  /// Regular special key button (sends with active modifiers)
+  Widget _modKey(ColorScheme cs, String label, String key,
+      {required bool isModifier}) {
     return Padding(
-      padding: const EdgeInsets.only(left: 2),
-      child: SizedBox(
-        width: 36,
-        height: 36,
-        child: Material(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              _conn.sendKeySpecial(key);
-              _vibrate(HapticFile.selection);
-            },
-            child: Icon(icon, size: 16, color: cs.onSurface.withValues(alpha: 0.6)),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => _sendSpecialWithMods(key),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 34),
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            alignment: Alignment.center,
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withValues(alpha: 0.6))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One-tap shortcut button (e.g. ⌘C = Cmd+C)
+  Widget _shortcutKey(
+      ColorScheme cs, String label, String key, List<String> mods) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () {
+            _conn.sendKeySpecial(key, modifiers: mods);
+            _vibrate(HapticFile.selection);
+          },
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 38),
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            alignment: Alignment.center,
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withValues(alpha: 0.5))),
           ),
         ),
       ),
