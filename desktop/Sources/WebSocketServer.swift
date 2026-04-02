@@ -6,12 +6,14 @@ import Network
 class WebSocketServer {
     let port: UInt16
     let maxConnections: Int
+    let bonjourType: String?
     private var listener: NWListener?
     private var connections: [NWConnection] = []
 
-    init(port: UInt16, maxConnections: Int = 2) {
+    init(port: UInt16, maxConnections: Int = 2, bonjourType: String? = nil) {
         self.port = port
         self.maxConnections = maxConnections
+        self.bonjourType = bonjourType
     }
 
     func start() {
@@ -27,10 +29,17 @@ class WebSocketServer {
             return
         }
 
+        if let bonjourType = bonjourType {
+            listener!.service = NWListener.Service(type: bonjourType)
+        }
+
         listener!.stateUpdateHandler = { state in
             switch state {
             case .ready:
                 print("[WS] Listening on port \(self.port)")
+                if self.bonjourType != nil {
+                    print("[Bonjour] Advertising on port \(self.port)")
+                }
             case .failed(let err):
                 print("[WS] Listener failed: \(err)")
             default:
