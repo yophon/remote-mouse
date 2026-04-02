@@ -41,13 +41,18 @@ struct Message {
     let dy: Double
     let button: String
     let id: Int?
+    let key: String
+    let modifiers: [String]
 
-    private init(type: String, dx: Double, dy: Double, button: String, id: Int?) {
+    private init(type: String, dx: Double = 0, dy: Double = 0, button: String = "left",
+                 id: Int? = nil, key: String = "", modifiers: [String] = []) {
         self.type = type
         self.dx = dx
         self.dy = dy
         self.button = button
         self.id = id
+        self.key = key
+        self.modifiers = modifiers
     }
 
     /// Try parsing binary format first, then JSON.
@@ -89,7 +94,6 @@ struct Message {
             type: type,
             dx: Double(dx),
             dy: Double(dy),
-            button: "left",
             id: Int(id)
         )
     }
@@ -99,12 +103,15 @@ struct Message {
               let type = json["type"] as? String else {
             return nil
         }
+        let mods = json["modifiers"] as? [String] ?? []
         return Message(
             type: type,
             dx: json["dx"] as? Double ?? 0,
             dy: json["dy"] as? Double ?? 0,
             button: json["button"] as? String ?? "left",
-            id: json["id"] as? Int
+            id: json["id"] as? Int,
+            key: json["key"] as? String ?? "",
+            modifiers: mods
         )
     }
 }
@@ -133,6 +140,14 @@ func dispatchMessage(_ msg: Message) {
         MouseController.scroll(dx: msg.dx, dy: msg.dy)
     case "drag":
         MouseController.drag(dx: msg.dx, dy: msg.dy)
+    case "keyText":
+        if !msg.key.isEmpty {
+            KeyboardController.typeText(msg.key)
+        }
+    case "keySpecial":
+        if !msg.key.isEmpty {
+            KeyboardController.pressSpecialKey(msg.key, modifiers: msg.modifiers)
+        }
     case "ping":
         break
     default:

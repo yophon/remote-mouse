@@ -48,6 +48,12 @@ class _TouchpadPageState extends State<TouchpadPage> {
   double _gestureDistance = 0.0;
   final Set<String> _activeButtons = {};
 
+  // Keyboard
+  bool _showKeyboard = false;
+  final TextEditingController _keyboardController = TextEditingController();
+  final FocusNode _keyboardFocusNode = FocusNode();
+  String _prevText = ' ';
+
   ConnectionService get _conn => widget.connection;
   SettingsService get _settings => widget.settings;
 
@@ -218,6 +224,8 @@ class _TouchpadPageState extends State<TouchpadPage> {
     _conn.removeListener(_onConnectionChanged);
     _settings.removeListener(_refresh);
     _tapDecisionTimer?.cancel();
+    _keyboardController.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -228,11 +236,13 @@ class _TouchpadPageState extends State<TouchpadPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
             _buildTopBar(cs),
             Expanded(child: _buildTouchpad(cs)),
+            if (_showKeyboard) _buildKeyboardBar(cs),
             _buildBottomBar(cs),
           ],
         ),
@@ -279,6 +289,15 @@ class _TouchpadPageState extends State<TouchpadPage> {
             ),
           ),
           const Spacer(),
+          IconButton(
+            icon: Icon(
+                _showKeyboard ? Icons.keyboard_hide : Icons.keyboard,
+                color: _showKeyboard
+                    ? cs.primary
+                    : cs.onSurface.withValues(alpha: 0.4),
+                size: 20),
+            onPressed: _toggleKeyboard,
+          ),
           IconButton(
             icon: Icon(Icons.settings_outlined,
                 color: cs.onSurface.withValues(alpha: 0.4), size: 20),
@@ -416,6 +435,126 @@ class _TouchpadPageState extends State<TouchpadPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _toggleKeyboard() {
+    setState(() {
+      _showKeyboard = !_showKeyboard;
+      if (_showKeyboard) {
+        _keyboardController.text = ' ';
+        _prevText = ' ';
+        // Delay focus to after the widget is built
+        Future.microtask(() {
+          _keyboardFocusNode.requestFocus();
+          // Place cursor at end
+          _keyboardController.selection = TextSelection.collapsed(
+              offset: _keyboardController.text.length);
+        });
+      } else {
+        _keyboardFocusNode.unfocus();
+      }
+    });
+  }
+
+  void _onKeyboardInput() {
+    final current = _keyboardController.text;
+    final prev = _prevText;
+
+    if (current.length > prev.length) {
+      // Characters were added
+      final added = current.substring(prev.length);
+      _conn.sendKeyText(added);
+    } else if (current.length < prev.length) {
+      // Characters were deleted (backspace)
+      final deleted = prev.length - current.length;
+      for (int i = 0; i < deleted; i++) {
+        _conn.sendKeySpecial('backspace');
+      }
+    }
+
+    _prevText = current;
+
+    // Keep at least a space so backspace always works
+    if (current.isEmpty) {
+      _keyboardController.text = ' ';
+      _keyboardController.selection =
+          const TextSelection.collapsed(offset: 1);
+      _prevText = ' ';
+    }
+  }
+
+  Widget _buildKeyboardBar(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _keyboardController,
+                focusNode: _keyboardFocusNode,
+                autofocus: false,
+                enableSuggestions: false,
+                autocorrect: false,
+                style: TextStyle(color: cs.onSurface, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: _settings.text('keyboard_hint'),
+                  hintStyle: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  filled: true,
+                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) => _onKeyboardInput(),
+                onSubmitted: (_) {
+                  _conn.sendKeySpecial('enter');
+                  // Reset the text field
+                  _keyboardController.text = ' ';
+                  _keyboardController.selection =
+                      const TextSelection.collapsed(offset: 1);
+                  _prevText = ' ';
+                  _keyboardFocusNode.requestFocus();
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _specialKeyButton(cs, Icons.keyboard_return, 'enter'),
+          _specialKeyButton(cs, Icons.arrow_upward, 'up'),
+          _specialKeyButton(cs, Icons.arrow_downward, 'down'),
+          _specialKeyButton(cs, Icons.arrow_back, 'left'),
+          _specialKeyButton(cs, Icons.arrow_forward, 'right'),
+        ],
+      ),
+    );
+  }
+
+  Widget _specialKeyButton(ColorScheme cs, IconData icon, String key) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: Material(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              _conn.sendKeySpecial(key);
+              _vibrate(HapticFile.selection);
+            },
+            child: Icon(icon, size: 16, color: cs.onSurface.withValues(alpha: 0.6)),
+          ),
+        ),
       ),
     );
   }

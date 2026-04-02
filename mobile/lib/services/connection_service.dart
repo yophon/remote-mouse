@@ -196,6 +196,19 @@ class ConnectionService extends ChangeNotifier {
     _sendFast(_encodeBinary(_tagScroll, dx, dy, _nextId()));
   }
 
+  void sendKeyText(String text) {
+    _sendReliable({'type': 'keyText', 'key': text, 'id': _nextId()});
+  }
+
+  void sendKeySpecial(String key, {List<String> modifiers = const []}) {
+    _sendReliable({
+      'type': 'keySpecial',
+      'key': key,
+      'modifiers': modifiers,
+      'id': _nextId(),
+    });
+  }
+
   @override
   void dispose() {
     disconnect();

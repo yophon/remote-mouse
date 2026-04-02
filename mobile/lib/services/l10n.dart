@@ -38,6 +38,7 @@ const Map<String, String> enStrings = {
   'left': 'Left',
   'right': 'Right',
   'unknown': 'Unknown',
+  'keyboard_hint': 'Type here...',
 };
 
 const Map<String, String> zhStrings = {
@@ -79,4 +80,5 @@ const Map<String, String> zhStrings = {
   'left': '左键',
   'right': '右键',
   'unknown': '未知设备',
+  'keyboard_hint': '在此输入...',
 };
