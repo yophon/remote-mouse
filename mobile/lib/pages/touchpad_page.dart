@@ -53,6 +53,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
 
   // Keyboard
   bool _showKeyboard = false;
+  int _kbPage = 0; // 0 = extra keys bar, 1 = text input field
   final TextEditingController _keyboardController = TextEditingController();
   final FocusNode _keyboardFocusNode = FocusNode();
   String _prevText = ' ';
@@ -456,8 +457,8 @@ class _TouchpadPageState extends State<TouchpadPage> {
     setState(() {
       _showKeyboard = !_showKeyboard;
       if (_showKeyboard) {
-        _keyboardController.text = ' ';
-        _prevText = ' ';
+        _kbPage = 0;
+        _resetKeyboardText();
         Future.microtask(() {
           _keyboardFocusNode.requestFocus();
           _keyboardController.selection = TextSelection.collapsed(
@@ -465,7 +466,6 @@ class _TouchpadPageState extends State<TouchpadPage> {
         });
       } else {
         _keyboardFocusNode.unfocus();
-        // Reset modifiers
         for (final key in _modifiers.keys) {
           _modifiers[key] = _ModState.off;
         }
@@ -549,97 +549,147 @@ class _TouchpadPageState extends State<TouchpadPage> {
   }
 
   Widget _buildKeyboardBar(ColorScheme cs) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Extra keys bar (Termux-style)
-        SizedBox(
-          height: 36,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+    return GestureDetector(
+      onVerticalDragEnd: (details) {
+        // Swipe up → show extra keys (page 0), swipe down → show input (page 1)
+        if (details.primaryVelocity != null) {
+          setState(() {
+            _kbPage = details.primaryVelocity! < 0 ? 0 : 1;
+          });
+        }
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Page indicator
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Modifier keys
-              _modKey(cs, 'ESC', 'esc', isModifier: false),
-              _modKey(cs, 'TAB', 'tab', isModifier: false),
-              _modKeyToggle(cs, 'CTRL', 'ctrl'),
-              _modKeyToggle(cs, 'ALT', 'alt'),
-              _modKeyToggle(cs, 'SHIFT', 'shift'),
-              _modKeyToggle(cs, 'CMD', 'cmd'),
-              const SizedBox(width: 6),
-              // Navigation & common keys
-              _modKey(cs, '↑', 'up', isModifier: false),
-              _modKey(cs, '↓', 'down', isModifier: false),
-              _modKey(cs, '←', 'left', isModifier: false),
-              _modKey(cs, '→', 'right', isModifier: false),
-              _modKey(cs, 'HOME', 'home', isModifier: false),
-              _modKey(cs, 'END', 'end', isModifier: false),
-              _modKey(cs, 'PGUP', 'pageup', isModifier: false),
-              _modKey(cs, 'PGDN', 'pagedown', isModifier: false),
-              _modKey(cs, 'DEL', 'delete', isModifier: false),
-              const SizedBox(width: 6),
-              // Common shortcuts as one-tap
-              _shortcutKey(cs, '⌘C', 'c', ['cmd']),
-              _shortcutKey(cs, '⌘V', 'v', ['cmd']),
-              _shortcutKey(cs, '⌘X', 'x', ['cmd']),
-              _shortcutKey(cs, '⌘Z', 'z', ['cmd']),
-              _shortcutKey(cs, '⌘A', 'a', ['cmd']),
-              _shortcutKey(cs, '⌘⇧Z', 'z', ['cmd', 'shift']),
-              _shortcutKey(cs, '⌘T', 'tab', ['cmd']),
-              _shortcutKey(cs, '⌘W', 'w', ['cmd']),
-              _shortcutKey(cs, '⌘Q', 'q', ['cmd']),
-              _shortcutKey(cs, '⌘SP', 'space', ['cmd']),
+              _pageIndicatorDot(cs, _kbPage == 0),
+              const SizedBox(width: 4),
+              _pageIndicatorDot(cs, _kbPage == 1),
             ],
           ),
-        ),
-        const SizedBox(height: 4),
-        // Text input row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 38,
-                  child: TextField(
-                    controller: _keyboardController,
-                    focusNode: _keyboardFocusNode,
-                    autofocus: false,
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    style: TextStyle(color: cs.onSurface, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: _settings.text('keyboard_hint'),
-                      hintStyle: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 13),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      filled: true,
-                      fillColor:
-                          cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (_) => _onKeyboardInput(),
-                    onSubmitted: (_) {
-                      _sendSpecialWithMods('enter');
-                      _keyboardController.text = ' ';
-                      _keyboardController.selection =
-                          const TextSelection.collapsed(offset: 1);
-                      _prevText = ' ';
-                      _keyboardFocusNode.requestFocus();
-                    },
-                  ),
+          const SizedBox(height: 3),
+          if (_kbPage == 0) ...[
+            // Extra keys bar (Termux-style)
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: [
+                  _modKey(cs, 'ESC', 'esc'),
+                  _modKey(cs, 'TAB', 'tab'),
+                  _modKeyToggle(cs, 'CTRL', 'ctrl'),
+                  _modKeyToggle(cs, 'ALT', 'alt'),
+                  _modKeyToggle(cs, 'SHIFT', 'shift'),
+                  _modKeyToggle(cs, 'CMD', 'cmd'),
+                  const SizedBox(width: 6),
+                  _modKey(cs, '↑', 'up'),
+                  _modKey(cs, '↓', 'down'),
+                  _modKey(cs, '←', 'left'),
+                  _modKey(cs, '→', 'right'),
+                  _modKey(cs, 'HOME', 'home'),
+                  _modKey(cs, 'END', 'end'),
+                  _modKey(cs, 'PGUP', 'pageup'),
+                  _modKey(cs, 'PGDN', 'pagedown'),
+                  _modKey(cs, 'DEL', 'delete'),
+                  const SizedBox(width: 6),
+                  _shortcutKey(cs, '⌘C', 'c', ['cmd']),
+                  _shortcutKey(cs, '⌘V', 'v', ['cmd']),
+                  _shortcutKey(cs, '⌘X', 'x', ['cmd']),
+                  _shortcutKey(cs, '⌘Z', 'z', ['cmd']),
+                  _shortcutKey(cs, '⌘A', 'a', ['cmd']),
+                  _shortcutKey(cs, '⌘⇧Z', 'z', ['cmd', 'shift']),
+                  _shortcutKey(cs, '⌘T', 'tab', ['cmd']),
+                  _shortcutKey(cs, '⌘W', 'w', ['cmd']),
+                  _shortcutKey(cs, '⌘Q', 'q', ['cmd']),
+                  _shortcutKey(cs, '⌘SP', 'space', ['cmd']),
+                ],
+              ),
+            ),
+            // Hidden text field to keep system keyboard open and capture input
+            SizedBox(
+              height: 0,
+              child: Opacity(
+                opacity: 0,
+                child: TextField(
+                  controller: _keyboardController,
+                  focusNode: _keyboardFocusNode,
+                  autofocus: false,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  onChanged: (_) => _onKeyboardInput(),
+                  onSubmitted: (_) {
+                    _sendSpecialWithMods('enter');
+                    _resetKeyboardText();
+                    _keyboardFocusNode.requestFocus();
+                  },
                 ),
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ] else ...[
+            // Visible text input row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              child: SizedBox(
+                height: 38,
+                child: TextField(
+                  controller: _keyboardController,
+                  focusNode: _keyboardFocusNode,
+                  autofocus: false,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  style: TextStyle(color: cs.onSurface, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: _settings.text('keyboard_hint'),
+                    hintStyle: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.3),
+                        fontSize: 13),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    filled: true,
+                    fillColor:
+                        cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (_) => _onKeyboardInput(),
+                  onSubmitted: (_) {
+                    _sendSpecialWithMods('enter');
+                    _resetKeyboardText();
+                    _keyboardFocusNode.requestFocus();
+                  },
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  Widget _pageIndicatorDot(ColorScheme cs, bool active) {
+    return Container(
+      width: active ? 12 : 6,
+      height: 4,
+      decoration: BoxDecoration(
+        color: active
+            ? cs.primary.withValues(alpha: 0.6)
+            : cs.onSurface.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+
+  void _resetKeyboardText() {
+    _keyboardController.text = ' ';
+    _keyboardController.selection =
+        const TextSelection.collapsed(offset: 1);
+    _prevText = ' ';
   }
 
   /// Modifier toggle button (Termux-style: tap=once, double-tap=lock)
@@ -681,8 +731,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
   }
 
   /// Regular special key button (sends with active modifiers)
-  Widget _modKey(ColorScheme cs, String label, String key,
-      {required bool isModifier}) {
+  Widget _modKey(ColorScheme cs, String label, String key) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
