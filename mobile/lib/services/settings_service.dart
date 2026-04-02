@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'connection_service.dart';
+import 'l10n.dart';
 
 enum OrientationLock { portrait, landscape, auto }
 
@@ -32,91 +33,9 @@ class SettingsService extends ChangeNotifier {
   OrientationLock get orientationLock => _orientationLock;
 
   String text(String key) {
-    final dict = _language == 'chinese' ? _zh : _en;
+    final dict = _language == 'chinese' ? zhStrings : enStrings;
     return dict[key] ?? key;
   }
-
-  static const _en = {
-    'connect': 'Connect',
-    'connected': 'Connected',
-    'connecting': 'Connecting...',
-    'disconnected': 'Disconnected',
-    'error': 'Error',
-    'settings': 'Settings',
-    'appearance': 'Appearance',
-    'dark_mode': 'Dark Mode',
-    'orientation': 'Orientation',
-    'portrait': 'Portrait',
-    'landscape': 'Landscape',
-    'auto': 'Auto',
-    'communication': 'Communication',
-    'cursor': 'Cursor',
-    'cursor_speed': 'Cursor Speed',
-    'invert_cursor': 'Invert Cursor',
-    'precision': 'Enhance Precision',
-    'scroll': 'Scroll',
-    'scroll_speed': 'Scroll Speed',
-    'natural_scroll': 'Natural Scroll',
-    'haptic': 'Haptic Feedback',
-    'haptic_desc': 'Vibrate the device on click',
-    'language': 'Language',
-    'about': 'About',
-    'version': 'Version',
-    'recent': 'Recent',
-    'discovered': 'Discovered',
-    'manual_connect': 'Connect to your computer',
-    'wifi_notice': 'Make sure phone and computer are on the same Wi-Fi network',
-    'just_now': 'Just now',
-    'm_ago': 'm ago',
-    'h_ago': 'h ago',
-    'd_ago': 'd ago',
-    'slide_to_move': 'Slide to move cursor',
-    'dragging': 'Dragging',
-    'left': 'Left',
-    'right': 'Right',
-    'unknown': 'Unknown',
-  };
-
-  static const _zh = {
-    'connect': '连接',
-    'connected': '已连接',
-    'connecting': '连接中...',
-    'disconnected': '未连接',
-    'error': '错误',
-    'settings': '设置',
-    'appearance': '外观',
-    'dark_mode': '深色模式',
-    'orientation': '屏幕方向',
-    'portrait': '竖屏',
-    'landscape': '横屏',
-    'auto': '自动',
-    'communication': '传输协议',
-    'cursor': '指针',
-    'cursor_speed': '移动速度',
-    'invert_cursor': '反转方向',
-    'precision': '提高精准度',
-    'scroll': '滚动',
-    'scroll_speed': '滚动速度',
-    'natural_scroll': '自然滚动',
-    'haptic': '触感反馈',
-    'haptic_desc': '在点击时触发震动',
-    'language': '语言',
-    'about': '关于',
-    'version': '版本',
-    'recent': '最近连接',
-    'discovered': '自动发现',
-    'manual_connect': '连接到您的电脑',
-    'wifi_notice': '请确保手机和电脑在同一个 Wi-Fi 网络',
-    'just_now': '刚刚',
-    'm_ago': '分钟前',
-    'h_ago': '小时前',
-    'd_ago': '天前',
-    'slide_to_move': '滑动移动光标',
-    'dragging': '拖拽中',
-    'left': '左键',
-    'right': '右键',
-    'unknown': '未知设备',
-  };
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();

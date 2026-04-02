@@ -63,20 +63,35 @@ class _ConnectPageState extends State<ConnectPage> {
   }
 
   Future<void> _startDiscovery() async {
-    setState(() => _searching = true);
+    await _stopDiscovery();
+    setState(() {
+      _searching = true;
+      _discovered.clear();
+    });
     try {
       _discovery = await startDiscovery('_remotemouse._tcp.');
       _discovery!.addServiceListener((service, status) {
         if (!mounted) return;
         setState(() {
           if (status == ServiceStatus.found) {
-            _discovered.add(service);
+            final exists = _discovered.any((s) =>
+                s.host == service.host && s.port == service.port);
+            if (!exists) _discovered.add(service);
           }
         });
       });
-    } catch (_) {}
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) setState(() => _searching = false);
+    } catch (_) {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _stopDiscovery() async {
+    if (_discovery != null) {
+      try {
+        await stopDiscovery(_discovery!);
+      } catch (_) {}
+      _discovery = null;
+    }
   }
 
   Future<void> _connect({String? host, int? port}) async {
@@ -91,7 +106,7 @@ class _ConnectPageState extends State<ConnectPage> {
   void dispose() {
     _connection.removeListener(_onConnectionChanged);
     _history.removeListener(_refresh);
-    if (_discovery != null) stopDiscovery(_discovery!);
+    _stopDiscovery();
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
@@ -210,16 +225,28 @@ class _ConnectPageState extends State<ConnectPage> {
                 child: ListView(
                   children: [
                     // Discovered
-                    if (_discovered.isNotEmpty || _searching)
-                      _buildSection(
+                    _buildSection(
                         title: _settings.text('discovered'),
-                        trailing: _searching
-                            ? SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: cs.primary))
-                            : null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_searching)
+                              SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: cs.primary)),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: _searching ? null : _startDiscovery,
+                              child: Icon(Icons.refresh,
+                                  size: 16,
+                                  color: _searching
+                                      ? cs.onSurface.withValues(alpha: 0.2)
+                                      : cs.primary),
+                            ),
+                          ],
+                        ),
                         cs: cs,
                         children: _discovered.map((s) => _serverTile(
                               icon: Icons.computer,

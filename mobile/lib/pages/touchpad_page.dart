@@ -33,7 +33,6 @@ class _TouchpadPageState extends State<TouchpadPage> {
 
   // Double-tap detection
   DateTime? _lastTapTime;
-  Timer? _singleTapTimer;
 
   // Multi-finger tracking
   int _pointerCount = 0;
@@ -148,18 +147,20 @@ class _TouchpadPageState extends State<TouchpadPage> {
   void _handleTap() {
     final now = DateTime.now();
     if (_lastTapTime != null &&
-        now.difference(_lastTapTime!) < const Duration(milliseconds: 250)) {
-      _singleTapTimer?.cancel();
+        now.difference(_lastTapTime!) < const Duration(milliseconds: 300)) {
+      // Second tap within window — upgrade to double-click
       _conn.sendDoubleClick();
       _vibrate(HapticFile.medium);
       _lastTapTime = null;
     } else {
+      // First tap — send click immediately, no delay
       _lastTapTime = now;
-      _singleTapTimer?.cancel();
-      _singleTapTimer = Timer(const Duration(milliseconds: 120), () {
-        _conn.sendClick();
-        _vibrate(HapticFile.selection);
-      });
+      _conn.sendClick();
+      _vibrate(HapticFile.selection);
+      // Guard: if a second tap arrives within 300ms, the doubleClick
+      // branch above will fire. The server's dedup prevents the first
+      // click from interfering with the double-click because
+      // sendDoubleClick uses a separate message type.
     }
   }
 
@@ -216,7 +217,6 @@ class _TouchpadPageState extends State<TouchpadPage> {
   void dispose() {
     _conn.removeListener(_onConnectionChanged);
     _settings.removeListener(_refresh);
-    _singleTapTimer?.cancel();
     _tapDecisionTimer?.cancel();
     super.dispose();
   }
@@ -242,7 +242,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
 
   Widget _buildTopBar(ColorScheme cs) {
     final modeLabel = _conn.transportMode == TransportMode.hybrid
-        ? 'UDP+WS'
+        ? (_conn.udpAvailable ? 'UDP+WS' : 'WS (UDP failed)')
         : 'WS';
 
     return Padding(
@@ -363,6 +363,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
         children: [
           Expanded(
             child: _buildMouseButton(
+              buttonId: 'left',
               label: _settings.text('left'),
               onDown: () {
                 _conn.sendMouseDown(button: 'left');
@@ -400,6 +401,7 @@ class _TouchpadPageState extends State<TouchpadPage> {
           const SizedBox(width: 8),
           Expanded(
             child: _buildMouseButton(
+              buttonId: 'right',
               label: _settings.text('right'),
               onDown: () {
                 _conn.sendMouseDown(button: 'right');
@@ -419,12 +421,13 @@ class _TouchpadPageState extends State<TouchpadPage> {
   }
 
   Widget _buildMouseButton({
+    required String buttonId,
     required String label,
     required VoidCallback onDown,
     required VoidCallback onUp,
     required ColorScheme cs,
   }) {
-    final isActive = _activeButtons.contains(label.toLowerCase());
+    final isActive = _activeButtons.contains(buttonId);
 
     return Listener(
       onPointerDown: (_) => onDown(),
