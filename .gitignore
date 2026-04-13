@@ -18,3 +18,6 @@ desktop/DerivedData/
 .vscode/
 *.swp
 *.swo
+
+# Local notes
+docs/git-identity-and-history-cleanup.md
